@@ -199,7 +199,7 @@ const fetchAllUniswapV3Pools = async () => {
   while (true) {
     const query = gql`
         {
-          pools(first: ${pageSize}, skip: ${skip}) {
+          pools(where: {liquidity_gt : 0}, first: ${pageSize}, skip: ${skip}) {
             id
             token0 {
               id
@@ -315,26 +315,55 @@ function prepareSwapData(amountIn, minAmountOut, path) {
   );
 }
 
+
 async function estimateGasForSwap(fromAddress, swapData, provider) {
-  console.log("estimating gas for swap");
-  const gasEstimate = (await provider.getFeeData()).gasPrice;
+
+  console.log("Estimating gas for swap");
+
   const transaction = {
-    to: uniswapRouterAddress,
+
+    to: UNISWAPV3_ROUTER_ADDRESS,
+
     from: fromAddress,
+
     data: swapData,
+
     gasLimit: 500000, // Convert number to hexadecimal and add '0x' prefix
+
   };
+
   try {
+
     const gasUsed = await provider.estimateGas(transaction);
 
-    console.log("total gas used:" + gasEstimate * gasUsed.toBigInt);
-    return gasEstimate * gasUsed.toBigInt();
+
+
+    console.log(" Total gas used:", BigInt(gasUsed));
+
+    return BigInt(gasUsed);
+
   } catch (error) {
-    console.error("Error estimating gas:", error);
-    console.log("Failed to estimate gas");
+
+    console.error(" Failed to estimate gas");
+
+    if (error.reason == "STF") {
+
+      console.error("   The swap amount is too big");
+
+      console.log(error);
+
+    } else {
+
+      console.error(error);
+
+    }
+
+
+
     return BigInt(0);
+
   }
-}
+  
 async function calculateTotalTransactionCost(combinedSwapData, provider) {
   console.log("calculating transaction costs");
   const gasPrice = ethers.parseUnits(
@@ -349,7 +378,7 @@ async function calculateTotalTransactionCost(combinedSwapData, provider) {
   const totalCostEth = gasPrice * BigInt(gasLimit);
   const ethUsdcRate = globalEthPrice;
   const totalGasCostUsdc = Number(totalCostEth) * ethUsdcRate;
-  return totalGasCostUsdc.toString;
+  return totalGasCostUsdc.toString();
 }
 
 async function monitorArbitrageAcrossVersions(provider) {
