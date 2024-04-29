@@ -1,12 +1,68 @@
 import { ethers } from "ethers";
 import { request, gql } from "graphql-request";
 import axios from "axios";
-import { poolABI, uniswapRouterABI } from "./abis";
+
+import {
+  poolABI,
+  uniswapV3RouterABI,
+  uniswapV3FactoryABI,
+  erc20ABI,
+} from "./abis";
+
 let globalEthPrice = 0;
 
-const walletAddress =
+const WALLET_PRIVATE_KEY =
+
+Merge change
+
+
+Merge change
+
   "53e4cf35a5daa309df98ffa9b2c627e7a4cb5cd89b5abd35dffddf4477a6b47b";
-const amountToSwap = 100;
+
+const PROVIDER_URL =
+
+  "https://mainnet.infura.io/v3/a0c47124ee964d399ee1cedb26eb5c2c";
+
+// "https://rpc.tenderly.co/fork/705ee476-0086-48cd-bc35-e0d48dfda9bd";
+
+const UNISWAPV3_FACTORY_ADDRESS = "0x1F98431c8aD98523631AE4a59f267346ea31F984";
+
+const UNISWAPV3_ROUTER_ADDRESS = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
+
+const USDC_ADDRESS = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+
+const amountToSwap = 1;
+
+
+
+interface ResponseData {
+
+  pairs: any[];
+
+  pools: any[];
+
+}
+
+
+
+// Connect to the network
+
+const provider = new ethers.JsonRpcProvider(PROVIDER_URL);
+
+
+
+// Wallet setup
+
+const wallet = new ethers.Wallet(WALLET_PRIVATE_KEY, provider);
+
+
+
+function sleep(ms) {
+
+  return new Promise((resolve) => setTimeout(resolve, ms));
+
+}
 
 async function getEthUsdcRate() {
   try {
@@ -20,18 +76,6 @@ async function getEthUsdcRate() {
     return null;
   }
 }
-interface ResponseData {
-  pairs: any[];
-  pools: any[];
-}
-
-// Connect to the network
-const provider = new ethers.JsonRpcProvider(
-  "https://mainnet.infura.io/v3/a0c47124ee964d399ee1cedb26eb5c2c"
-);
-
-// Wallet setup
-const wallet = new ethers.Wallet(walletAddress, provider);
 
 async function checkProviderStatus(provider) {
   try {
@@ -47,8 +91,6 @@ async function checkProviderStatus(provider) {
   }
 }
 
-// Call the function to check the provider status
-checkProviderStatus(provider);
 
 async function getTokenToTokenPrice(
   tokenA,
@@ -115,12 +157,6 @@ const fetchUniswapV2Pairs = async () => {
     return [];
   }
 };
-
-// Define the Uniswap v3 factory contract address and ABI
-const uniswapV3FactoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"; // Mainnet factory address
-const uniswapV3FactoryABI = [
-  "event PoolCreated(address token0, address token1, uint24 fee, address pool, uint160 sqrtPriceX96)",
-];
 
 // Create an instance of the Uniswap v3 factory contract
 const uniswapV3FactoryContract = new ethers.Contract(
@@ -498,5 +534,8 @@ async function checkArbitrageOpportunity(
     );
   }
 }
+
+// Call the function to check the provider status
+checkProviderStatus(provider);
 
 monitorArbitrageAcrossVersions(provider); // Initial call to start the monitoring loop
