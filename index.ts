@@ -363,22 +363,34 @@ async function estimateGasForSwap(fromAddress, swapData, provider) {
     return BigInt(0);
 
   }
-  
+
+
 async function calculateTotalTransactionCost(combinedSwapData, provider) {
-  console.log("calculating transaction costs");
-  const gasPrice = ethers.parseUnits(
-    await getCurrentGasPrice(provider),
-    "gwei"
-  );
+
+  const gasPrice = ethers.parseUnits(await getCurrentGasPrice(provider), "wei");
+
+
+
   const gasLimit = await estimateGasForSwap(
+
     wallet.address,
+
     combinedSwapData,
+
     provider
+
   );
+
+
+
   const totalCostEth = gasPrice * BigInt(gasLimit);
+
   const ethUsdcRate = globalEthPrice;
-  const totalGasCostUsdc = Number(totalCostEth) * ethUsdcRate;
+
+  const totalGasCostUsdc = (Number(totalCostEth) * ethUsdcRate) / 1e18;
+
   return totalGasCostUsdc.toString();
+
 }
 
 async function monitorArbitrageAcrossVersions(provider) {
@@ -400,18 +412,33 @@ async function monitorArbitrageAcrossVersions(provider) {
     // Maps token IDs to pools where the token is present for quick access
     const tokenToPools = {};
 
-    // Aggregate pools data from V2 and V3 into a single map
-    allPools.forEach((pool) => {
-      [pool.token0.id, pool.token1.id].forEach((tokenId) => {
+    / Aggregate pools data from V2 and V3 into a single map
+
+    allPools.forEach(async (pool) => {
+
+      [pool.token0.id, pool.token1.id].forEach(async (tokenId) => {
+
         if (!tokenToPools[tokenId]) {
+
           tokenToPools[tokenId] = [];
+
         }
+
+
+
         tokenToPools[tokenId].push(pool);
+
       });
+
     });
 
-    const usdcTokenId = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
-    const usdcPools = tokenToPools[usdcTokenId] || [];
+
+
+    const usdcPools = tokenToPools[USDC_ADDRESS] || [];
+
+
+
+    let cntAll = 0;
 
     for (const poolAB of usdcPools) {
       const tokenB =
