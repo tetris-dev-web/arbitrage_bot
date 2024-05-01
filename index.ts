@@ -534,6 +534,52 @@ async function checkArbitrageOpportunity(
     poolCA,
     provider
   );
+
+  
+  // console.log("checkArbitrageOpportunity - Check pool liquidity");
+
+  const tokenAContract = new ethers.Contract(tokenA, erc20ABI, provider);
+
+  const tokenBContract = new ethers.Contract(tokenB, erc20ABI, provider);
+
+  const tokenCContract = new ethers.Contract(tokenC, erc20ABI, provider);
+
+  if ((await tokenBContract.balanceOf(poolAB)) <= amountB) {
+
+    console.log(
+
+      `No profitable arbitrage opportunity. Not enough liquidity in Pool: ${poolAB} for ${tokenB}`
+
+    );
+
+    return;
+
+  }
+
+  if ((await tokenCContract.balanceOf(poolBC)) <= amountC) {
+
+    console.log(
+
+      `No profitable arbitrage opportunity. Not enough liquidity in Pool: ${poolBC} for ${tokenC}`
+
+    );
+
+    return;
+
+  }
+
+  if ((await tokenAContract.balanceOf(poolCA)) <= amountB) {
+
+    console.log(
+
+      `No profitable arbitrage opportunity. Not enough liquidity in Pool: ${poolCA} for ${tokenA}`
+
+    );
+
+    return;
+
+  }
+  
   // Prepare swap data for all three swaps
   // convert feeAB to number
   const feeNumberAB = parseFloat(feeAB);
