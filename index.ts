@@ -1,67 +1,37 @@
 import { ethers } from "ethers";
 import { request, gql } from "graphql-request";
 import axios from "axios";
-
 import {
   poolABI,
   uniswapV3RouterABI,
   uniswapV3FactoryABI,
   erc20ABI,
 } from "./abis";
-
 let globalEthPrice = 0;
 
 const WALLET_PRIVATE_KEY =
-
-Merge change
-
-
-Merge change
-
   "53e4cf35a5daa309df98ffa9b2c627e7a4cb5cd89b5abd35dffddf4477a6b47b";
-
 const PROVIDER_URL =
-
   "https://mainnet.infura.io/v3/a0c47124ee964d399ee1cedb26eb5c2c";
-
 // "https://rpc.tenderly.co/fork/705ee476-0086-48cd-bc35-e0d48dfda9bd";
-
 const UNISWAPV3_FACTORY_ADDRESS = "0x1F98431c8aD98523631AE4a59f267346ea31F984";
-
 const UNISWAPV3_ROUTER_ADDRESS = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
-
 const USDC_ADDRESS = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
-
 const amountToSwap = 1;
 
-
-
 interface ResponseData {
-
   pairs: any[];
-
   pools: any[];
-
 }
 
-
-
 // Connect to the network
-
 const provider = new ethers.JsonRpcProvider(PROVIDER_URL);
 
-
-
 // Wallet setup
-
 const wallet = new ethers.Wallet(WALLET_PRIVATE_KEY, provider);
 
-
-
 function sleep(ms) {
-
   return new Promise((resolve) => setTimeout(resolve, ms));
-
 }
 
 async function getEthUsdcRate() {
@@ -91,7 +61,6 @@ async function checkProviderStatus(provider) {
   }
 }
 
-
 async function getTokenToTokenPrice(
   tokenA,
   tokenB,
@@ -100,7 +69,6 @@ async function getTokenToTokenPrice(
   provider
 ) {
   const uniswapContract = new ethers.Contract(poolAddress, poolABI, provider);
-
   const [slot0, token0] = await Promise.all([
     uniswapContract.slot0(),
     uniswapContract.token0(),
@@ -124,6 +92,7 @@ async function getTokenToTokenPrice(
 
   // Calculate the amount of tokenB received for tokenA
   const tokenBAmount = amountA * price;
+
   return tokenBAmount;
 }
 
@@ -160,7 +129,7 @@ const fetchUniswapV2Pairs = async () => {
 
 // Create an instance of the Uniswap v3 factory contract
 const uniswapV3FactoryContract = new ethers.Contract(
-  uniswapV3FactoryAddress,
+  UNISWAPV3_FACTORY_ADDRESS,
   uniswapV3FactoryABI,
   provider
 );
@@ -233,10 +202,9 @@ const uniswapV2PairABI = [
   "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
 ];
 
-const uniswapRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
 const uniswapRouterContract = new ethers.Contract(
-  uniswapRouterAddress,
-  uniswapRouterABI,
+  UNISWAPV3_ROUTER_ADDRESS,
+  uniswapV3RouterABI,
   provider
 );
 
@@ -245,11 +213,12 @@ async function getReserves(uniswapContract) {
   return reserves;
 }
 
-const ADDR_SIZE = 20;
-const FEE_SIZE = 3;
-const OFFSET = ADDR_SIZE + FEE_SIZE;
-const DATA_SIZE = OFFSET + ADDR_SIZE;
 export function encodePath(path: string[], fees: number[]): string {
+  const ADDR_SIZE = 20;
+  const FEE_SIZE = 3;
+  const OFFSET = ADDR_SIZE + FEE_SIZE;
+  const DATA_SIZE = OFFSET + ADDR_SIZE;
+
   if (path.length != fees.length + 1) {
     throw new Error("path/fee lengths do not match");
   }
@@ -267,19 +236,33 @@ export function encodePath(path: string[], fees: number[]): string {
   return encoded.toLowerCase();
 }
 
-function prepareSwapDataV3(path, recipient, amountIn, minAmountOut, deadline) {
-  console.log(
-    "preparing Swap data for a trade with the details: path: " +
-      path +
-      " recipient: " +
-      recipient +
-      " amountIn: " +
-      amountIn +
-      " minAmountOut: " +
-      minAmountOut +
-      " deadline: " +
-      deadline
+function prepareSwapDataV2(amountIn, minAmountOut, path) {
+  return uniswapRouterContract.interface.encodeFunctionData(
+    "swapExactTokensForTokens",
+    [
+      ethers.parseUnits(amountIn.toString(), "ether"), // 'ether' is used generically for decimal handling
+      ethers.parseUnits(minAmountOut.toString(), "ether"),
+      path,
+      wallet.address,
+      Math.floor(Date.now() / 1000) + 1800, // deadline 30 minutes from now
+    ]
   );
+}
+
+function prepareSwapDataV3(path, recipient, amountIn, minAmountOut, deadline) {
+  // console.log(
+  //   "preparing Swap data for a trade with the details: path: " +
+  //     path +
+  //     " recipient: " +
+  //     recipient +
+  //     " amountIn: " +
+  //     amountIn +
+  //     " minAmountOut: " +
+  //     minAmountOut +
+  //     " deadline: " +
+  //     deadline
+  // );
+
   return uniswapRouterContract.interface.encodeFunctionData("exactInput", [
     {
       path: path,
@@ -293,104 +276,66 @@ function prepareSwapDataV3(path, recipient, amountIn, minAmountOut, deadline) {
 
 async function getCurrentGasPrice(provider) {
   const gasPrice = (await provider.getFeeData()).gasPrice;
-  return ethers.formatUnits(gasPrice, "gwei");
+  return ethers.formatUnits(gasPrice, "wei");
 }
-
-async function estimateTransactionCostETH(gasUnits, provider) {
-  const gasPrice = (await provider.getFeeData()).gasPrice;
-  const costInWei = gasPrice.mul(gasUnits);
-  return ethers.formatEther(costInWei); // Convert wei to ETH
-}
-
-function prepareSwapData(amountIn, minAmountOut, path) {
-  return uniswapRouterContract.interface.encodeFunctionData(
-    "swapExactTokensForTokens",
-    [
-      ethers.parseUnits(amountIn.toString(), "ether"), // 'ether' is used generically for decimal handling
-      ethers.parseUnits(minAmountOut.toString(), "ether"),
-      path,
-      wallet.address,
-      Math.floor(Date.now() / 1000) + 1800, // deadline 30 minutes from now
-    ]
-  );
-}
-
 
 async function estimateGasForSwap(fromAddress, swapData, provider) {
-
   console.log("Estimating gas for swap");
-
   const transaction = {
-
     to: UNISWAPV3_ROUTER_ADDRESS,
-
     from: fromAddress,
-
     data: swapData,
-
     gasLimit: 500000, // Convert number to hexadecimal and add '0x' prefix
-
   };
-
   try {
-
     const gasUsed = await provider.estimateGas(transaction);
 
-
-
     console.log(" Total gas used:", BigInt(gasUsed));
-
     return BigInt(gasUsed);
-
   } catch (error) {
-
     console.error(" Failed to estimate gas");
-
     if (error.reason == "STF") {
-
       console.error("   The swap amount is too big");
-
       console.log(error);
-
     } else {
-
       console.error(error);
-
     }
 
+    return BigInt(0);
+  }
+}
 
+async function executeTransactionForSwap(fromAddress, swapData, provider) {
+  console.log("Proceed swap");
+  const transaction = {
+    to: UNISWAPV3_ROUTER_ADDRESS,
+    from: fromAddress,
+    data: swapData,
+    gasLimit: 500000, // Convert number to hexadecimal and add '0x' prefix
+  };
+  try {
+    await wallet.sendTransaction(transaction);
+  } catch (error) {
+    console.log(" Failed to execute transaction");
+    console.log(error);
 
     return BigInt(0);
-
   }
-
+}
 
 async function calculateTotalTransactionCost(combinedSwapData, provider) {
-
   const gasPrice = ethers.parseUnits(await getCurrentGasPrice(provider), "wei");
 
-
-
   const gasLimit = await estimateGasForSwap(
-
     wallet.address,
-
     combinedSwapData,
-
     provider
-
   );
 
-
-
   const totalCostEth = gasPrice * BigInt(gasLimit);
-
   const ethUsdcRate = globalEthPrice;
-
   const totalGasCostUsdc = (Number(totalCostEth) * ethUsdcRate) / 1e18;
-
   return totalGasCostUsdc.toString();
-
 }
 
 async function monitorArbitrageAcrossVersions(provider) {
@@ -403,8 +348,8 @@ async function monitorArbitrageAcrossVersions(provider) {
     //const v2Pools = await fetchUniswapV2Pairs();
     console.log("checking v3 pools");
     const v3Pools = await fetchAllUniswapV3Pools();
-
     const allPools = v3Pools;
+
     console.log(
       `Monitoring ${allPools.length} pools across Uniswap V2 and V3.`
     );
@@ -412,48 +357,36 @@ async function monitorArbitrageAcrossVersions(provider) {
     // Maps token IDs to pools where the token is present for quick access
     const tokenToPools = {};
 
-    / Aggregate pools data from V2 and V3 into a single map
-
+    // Aggregate pools data from V2 and V3 into a single map
     allPools.forEach(async (pool) => {
-
       [pool.token0.id, pool.token1.id].forEach(async (tokenId) => {
-
         if (!tokenToPools[tokenId]) {
-
           tokenToPools[tokenId] = [];
-
         }
 
-
-
         tokenToPools[tokenId].push(pool);
-
       });
-
     });
 
-
-
     const usdcPools = tokenToPools[USDC_ADDRESS] || [];
-
-
 
     let cntAll = 0;
 
     for (const poolAB of usdcPools) {
       const tokenB =
-        poolAB.token0.id === usdcTokenId ? poolAB.token1.id : poolAB.token0.id;
+        poolAB.token0.id === USDC_ADDRESS ? poolAB.token1.id : poolAB.token0.id;
       const poolsWithB = tokenToPools[tokenB] || [];
 
       for (const tokenC in tokenToPools) {
-        if (tokenC === usdcTokenId || tokenC === tokenB) continue; // Skip if it's USDC or tokenB
+        if (tokenC === USDC_ADDRESS || tokenC === tokenB) continue; // Skip if it's USDC or tokenB
 
         const poolsWithC = tokenToPools[tokenC] || [];
 
         for (const poolCA of poolsWithC) {
           if (
-            (poolCA.token0.id === tokenC && poolCA.token1.id === usdcTokenId) ||
-            (poolCA.token1.id === tokenC && poolCA.token0.id === usdcTokenId)
+            (poolCA.token0.id === tokenC &&
+              poolCA.token1.id === USDC_ADDRESS) ||
+            (poolCA.token1.id === tokenC && poolCA.token0.id === USDC_ADDRESS)
           ) {
             // We have a complete triangle: USDC -> tokenB -> tokenC -> USDC
             for (const poolBC of poolsWithB) {
@@ -461,6 +394,7 @@ async function monitorArbitrageAcrossVersions(provider) {
                 (poolBC.token0.id === tokenB && poolBC.token1.id === tokenC) ||
                 (poolBC.token1.id === tokenB && poolBC.token0.id === tokenC)
               ) {
+                console.log("===============================", cntAll);
                 console.log(
                   "checking arbitrage between pool A: " +
                     poolAB.id +
@@ -469,9 +403,10 @@ async function monitorArbitrageAcrossVersions(provider) {
                     " pool C: " +
                     poolCA.id
                 );
+
                 await checkArbitrageOpportunity(
                   amountToSwap, // Example starting amount, adjust as necessary
-                  usdcTokenId,
+                  USDC_ADDRESS,
                   tokenB,
                   tokenC,
                   poolAB.id,
@@ -482,6 +417,8 @@ async function monitorArbitrageAcrossVersions(provider) {
                   poolCA.feeTier,
                   provider
                 );
+
+                cntAll++;
               }
             }
           }
@@ -507,12 +444,7 @@ async function checkArbitrageOpportunity(
   feeCA,
   provider
 ) {
-  // Define the paths for each token swap
-  const pathAB = [tokenA, tokenB];
-  const pathBC = [tokenB, tokenC];
-  const pathCA = [tokenC, tokenA];
-
-  // Get amounts for each token swap
+  // console.log("checkArbitrageOpportunity - Get Swap token amount");
   const amountB = await getTokenToTokenPrice(
     tokenA,
     tokenB,
@@ -520,6 +452,7 @@ async function checkArbitrageOpportunity(
     poolAB,
     provider
   );
+
   const amountC = await getTokenToTokenPrice(
     tokenB,
     tokenC,
@@ -527,6 +460,7 @@ async function checkArbitrageOpportunity(
     poolBC,
     provider
   );
+
   const finalAmountA = await getTokenToTokenPrice(
     tokenC,
     tokenA,
@@ -535,53 +469,30 @@ async function checkArbitrageOpportunity(
     provider
   );
 
-  
   // console.log("checkArbitrageOpportunity - Check pool liquidity");
-
   const tokenAContract = new ethers.Contract(tokenA, erc20ABI, provider);
-
   const tokenBContract = new ethers.Contract(tokenB, erc20ABI, provider);
-
   const tokenCContract = new ethers.Contract(tokenC, erc20ABI, provider);
-
   if ((await tokenBContract.balanceOf(poolAB)) <= amountB) {
-
     console.log(
-
       `No profitable arbitrage opportunity. Not enough liquidity in Pool: ${poolAB} for ${tokenB}`
-
     );
-
     return;
-
   }
-
   if ((await tokenCContract.balanceOf(poolBC)) <= amountC) {
-
     console.log(
-
       `No profitable arbitrage opportunity. Not enough liquidity in Pool: ${poolBC} for ${tokenC}`
-
     );
-
     return;
-
   }
-
   if ((await tokenAContract.balanceOf(poolCA)) <= amountB) {
-
     console.log(
-
       `No profitable arbitrage opportunity. Not enough liquidity in Pool: ${poolCA} for ${tokenA}`
-
     );
-
     return;
-
   }
-  
+
   // Prepare swap data for all three swaps
-  // convert feeAB to number
   const feeNumberAB = parseFloat(feeAB);
   const feeNumberBC = parseFloat(feeBC);
   const feeNumberCA = parseFloat(feeCA);
@@ -589,16 +500,14 @@ async function checkArbitrageOpportunity(
     [tokenA, tokenB, tokenC, tokenA],
     [feeNumberAB, feeNumberBC, feeNumberCA]
   );
-  //const coder = new ethers.AbiCoder();
-  //const path = coder.encode(
-  //  ["address", "uint24", "address", "uint24", "address", "uint24", "address"],
-  //  [tokenA, feeNumberAB, tokenB, feeNumberBC, tokenC, feeNumberCA, tokenA]
-  //);
-  console.log(feeAB, feeBC, feeCA);
+
   const amountInWei = BigInt(Math.floor(parseFloat(amount) * 1e6));
   const zeroInWei = BigInt(0); // Zero value for transactions
   const deadline = Math.floor(Date.now() / 1000) + 1800; // 30 minutes from now
-  console.log({ path });
+
+  console.log("Tokens : ", tokenA, tokenB, tokenC);
+  console.log("Fee for pools : ", feeAB, feeBC, feeCA);
+
   const swapData = prepareSwapDataV3(
     path,
     wallet.address,
@@ -606,38 +515,47 @@ async function checkArbitrageOpportunity(
     zeroInWei,
     deadline
   );
-  console.log(Math.floor(Date.now() / 1000) + 1800);
-  // Combine swap data into one transaction
 
+  // Combine swap data into one transaction
   const profit = finalAmountA - amount;
 
-  // Calculate total transaction cost in ETH
-  const TRANSACTION_COST_ETH = parseFloat(
-    await calculateTotalTransactionCost(swapData, provider).toString()
+  // Calculate total transaction cost in USD
+  const TRANSACTION_COST_USD = parseFloat(
+    await calculateTotalTransactionCost(swapData, provider)
   );
 
-  if (profit > TRANSACTION_COST_ETH) {
-    const PROFITLOSS = profit - TRANSACTION_COST_ETH;
-    console.log(`Arbitrage opportunity found! Profit: ${PROFITLOSS} ${tokenA}`);
+  if (TRANSACTION_COST_USD != 0)
+    if (profit > TRANSACTION_COST_USD) {
+      const PROFITLOSS = profit - TRANSACTION_COST_USD;
+      console.log(
+        `Arbitrage opportunity found! Profit: ${PROFITLOSS} ${tokenA}`
+      );
 
-    // Execute combined transaction
-    const tx = await wallet.sendTransaction({
-      to: uniswapRouterAddress,
-      data: swapData, // Add '0x' prefix
-      gasPrice: ethers.parseUnits(await getCurrentGasPrice(provider), "gwei"),
-      gasLimit: await estimateGasForSwap(wallet.address, swapData, provider),
-    });
+      // Execute combined transaction
+      console.log("--checkArbitrageOpportunity--");
+      const tx = await wallet.sendTransaction({
+        to: UNISWAPV3_ROUTER_ADDRESS,
+        data: swapData, // Add '0x' prefix
+        gasPrice: ethers.parseUnits(await getCurrentGasPrice(provider), "gwei"),
+        gasLimit: await estimateGasForSwap(wallet.address, swapData, provider),
+      });
 
-    const receipt = await tx.wait();
-    console.log("Transaction mined:", receipt);
-  } else {
-    console.log(
-      `No profitable arbitrage opportunity. Profit: ${profit} ${tokenA} Transaction cost: ${TRANSACTION_COST_ETH} ETH`
-    );
-  }
+      const receipt = await tx.wait();
+      console.log("Transaction mined:", receipt);
+    } else if (profit < 0) {
+      console.log(
+        `No profitable arbitrage opportunity. Profit: ${profit} ${tokenA} Transaction cost: ${TRANSACTION_COST_USD} USD`
+      );
+    } else {
+      const targetAmountSwap = (amountToSwap * TRANSACTION_COST_USD) / profit;
+      console.log(
+        `Arbitrage opportunity found! min SwapAmount : ${targetAmountSwap} Profit: ${TRANSACTION_COST_USD} ${tokenA} Transaction cost: ${TRANSACTION_COST_USD} USD`
+      );
+    }
 }
 
 // Call the function to check the provider status
 checkProviderStatus(provider);
 
-monitorArbitrageAcrossVersions(provider); // Initial call to start the monitoring loop
+// Initial call to start the monitoring loop
+monitorArbitrageAcrossVersions(provider);
