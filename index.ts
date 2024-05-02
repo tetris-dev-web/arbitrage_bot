@@ -554,8 +554,58 @@ async function checkArbitrageOpportunity(
     }
 }
 
+async function executeArbitrageSwap(wallet) {
+  const poolAB = "0x07a6e955ba4345bae83ac2a6faa771fddd8a2011";
+  const poolBC = "0xc5e130ce0dd38e078a16af9189a182d2e8ce3c68";
+  const poolCA = "0x9445bd19767f73dcae6f2de90e6cd31192f62589";
+
+  const feeAB = 3000;
+  const feeBC = 3000;
+  const feeCA = 10000;
+
+  const tokenA = USDC_ADDRESS;
+  const tokenB = "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0";
+  const tokenC = "0xd533a949740bb3306d119cc777fa900ba034cd52";
+
+  const tokenAContract = new ethers.Contract(tokenA, erc20ABI, provider);
+
+  const path = encodePath(
+    [tokenA, tokenB, tokenC, tokenA],
+    [feeAB, feeBC, feeCA]
+  );
+
+  const amountInWei = BigInt(Math.floor(amountToSwap * 1e6));
+  const zeroInWei = BigInt(0); // Zero value for transactions
+  const deadline = Math.floor(Date.now() / 1000) + 1800; // 30 minutes from now
+
+  const swapData = prepareSwapDataV3(
+    path,
+    wallet.address,
+    amountInWei,
+    zeroInWei,
+    deadline
+  );
+
+  // USDC balance
+  const balanceBefore = parseInt(
+    await tokenAContract.balanceOf(wallet.address)
+  );
+  await executeTransactionForSwap(wallet.address, swapData, provider);
+  const balanceAfter = parseInt(await tokenAContract.balanceOf(wallet.address));
+
+  console.log("USDC Balance Before : ", balanceBefore);
+  console.log("USDC Balance After : ", balanceAfter);
+  console.log(
+    `Profit with ${amountToSwap} USDC : `,
+    balanceAfter - balanceBefore
+  );
+}
+
 // Call the function to check the provider status
 checkProviderStatus(provider);
 
 // Initial call to start the monitoring loop
 monitorArbitrageAcrossVersions(provider);
+
+// Execute swap transaction
+// executeArbitrageSwap(wallet);
