@@ -9,6 +9,7 @@ import {
 } from "./abis";
 let globalEthPrice = 0;
 
+// Define constants
 const WALLET_PRIVATE_KEY =
   "53e4cf35a5daa309df98ffa9b2c627e7a4cb5cd89b5abd35dffddf4477a6b47b";
 const PROVIDER_URL =
@@ -17,7 +18,8 @@ const PROVIDER_URL =
 const UNISWAPV3_FACTORY_ADDRESS = "0x1F98431c8aD98523631AE4a59f267346ea31F984";
 const UNISWAPV3_ROUTER_ADDRESS = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
 const USDC_ADDRESS = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
-const amountToSwap = 1;
+const amountToSwap = 40;
+const ENABLE_EXECUTION = false;
 
 interface ResponseData {
   pairs: any[];
@@ -197,11 +199,6 @@ const fetchAllUniswapV3Pools = async () => {
   return pools;
 };
 
-const uniswapV2PairABI = [
-  // Insert the minimum ABI needed to get reserves
-  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
-];
-
 const uniswapRouterContract = new ethers.Contract(
   UNISWAPV3_ROUTER_ADDRESS,
   uniswapV3RouterABI,
@@ -250,19 +247,6 @@ function prepareSwapDataV2(amountIn, minAmountOut, path) {
 }
 
 function prepareSwapDataV3(path, recipient, amountIn, minAmountOut, deadline) {
-  // console.log(
-  //   "preparing Swap data for a trade with the details: path: " +
-  //     path +
-  //     " recipient: " +
-  //     recipient +
-  //     " amountIn: " +
-  //     amountIn +
-  //     " minAmountOut: " +
-  //     minAmountOut +
-  //     " deadline: " +
-  //     deadline
-  // );
-
   return uniswapRouterContract.interface.encodeFunctionData("exactInput", [
     {
       path: path,
@@ -300,24 +284,6 @@ async function estimateGasForSwap(fromAddress, swapData, provider) {
     } else {
       console.error(error);
     }
-
-    return BigInt(0);
-  }
-}
-
-async function executeTransactionForSwap(fromAddress, swapData, provider) {
-  console.log("Proceed swap");
-  const transaction = {
-    to: UNISWAPV3_ROUTER_ADDRESS,
-    from: fromAddress,
-    data: swapData,
-    gasLimit: 500000, // Convert number to hexadecimal and add '0x' prefix
-  };
-  try {
-    await wallet.sendTransaction(transaction);
-  } catch (error) {
-    console.log(" Failed to execute transaction");
-    console.log(error);
 
     return BigInt(0);
   }
@@ -532,16 +498,24 @@ async function checkArbitrageOpportunity(
       );
 
       // Execute combined transaction
-      console.log("--checkArbitrageOpportunity--");
-      const tx = await wallet.sendTransaction({
-        to: UNISWAPV3_ROUTER_ADDRESS,
-        data: swapData, // Add '0x' prefix
-        gasPrice: ethers.parseUnits(await getCurrentGasPrice(provider), "gwei"),
-        gasLimit: await estimateGasForSwap(wallet.address, swapData, provider),
-      });
+      if (ENABLE_EXECUTION) {
+        const tx = await wallet.sendTransaction({
+          to: UNISWAPV3_ROUTER_ADDRESS,
+          data: swapData, // Add '0x' prefix
+          gasPrice: ethers.parseUnits(
+            await getCurrentGasPrice(provider),
+            "gwei"
+          ),
+          gasLimit: await estimateGasForSwap(
+            wallet.address,
+            swapData,
+            provider
+          ),
+        });
 
-      const receipt = await tx.wait();
-      console.log("Transaction mined:", receipt);
+        const receipt = await tx.wait();
+        console.log("Transaction mined:", receipt);
+      }
     } else if (profit < 0) {
       console.log(
         `No profitable arbitrage opportunity. Profit: ${profit} ${tokenA} Transaction cost: ${TRANSACTION_COST_USD} USD`
@@ -554,58 +528,8 @@ async function checkArbitrageOpportunity(
     }
 }
 
-async function executeArbitrageSwap(wallet) {
-  const poolAB = "0x07a6e955ba4345bae83ac2a6faa771fddd8a2011";
-  const poolBC = "0xc5e130ce0dd38e078a16af9189a182d2e8ce3c68";
-  const poolCA = "0x9445bd19767f73dcae6f2de90e6cd31192f62589";
-
-  const feeAB = 3000;
-  const feeBC = 3000;
-  const feeCA = 10000;
-
-  const tokenA = USDC_ADDRESS;
-  const tokenB = "0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0";
-  const tokenC = "0xd533a949740bb3306d119cc777fa900ba034cd52";
-
-  const tokenAContract = new ethers.Contract(tokenA, erc20ABI, provider);
-
-  const path = encodePath(
-    [tokenA, tokenB, tokenC, tokenA],
-    [feeAB, feeBC, feeCA]
-  );
-
-  const amountInWei = BigInt(Math.floor(amountToSwap * 1e6));
-  const zeroInWei = BigInt(0); // Zero value for transactions
-  const deadline = Math.floor(Date.now() / 1000) + 1800; // 30 minutes from now
-
-  const swapData = prepareSwapDataV3(
-    path,
-    wallet.address,
-    amountInWei,
-    zeroInWei,
-    deadline
-  );
-
-  // USDC balance
-  const balanceBefore = parseInt(
-    await tokenAContract.balanceOf(wallet.address)
-  );
-  await executeTransactionForSwap(wallet.address, swapData, provider);
-  const balanceAfter = parseInt(await tokenAContract.balanceOf(wallet.address));
-
-  console.log("USDC Balance Before : ", balanceBefore);
-  console.log("USDC Balance After : ", balanceAfter);
-  console.log(
-    `Profit with ${amountToSwap} USDC : `,
-    balanceAfter - balanceBefore
-  );
-}
-
 // Call the function to check the provider status
 checkProviderStatus(provider);
 
 // Initial call to start the monitoring loop
 monitorArbitrageAcrossVersions(provider);
-
-// Execute swap transaction
-// executeArbitrageSwap(wallet);

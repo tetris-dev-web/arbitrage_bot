@@ -1783,3 +1783,8 @@ export const erc20ABI = [
     type: "function",
   },
 ];
+
+export const uniswapV2PairABI = [
+  // Insert the minimum ABI needed to get reserves
+  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+];
